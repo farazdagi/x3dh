@@ -3,77 +3,78 @@
 package x3dh
 
 import (
-	"crypto/rand"
+	"crypto"
 	"io"
-
-	"golang.org/x/crypto/curve25519"
 )
 
 const (
-	// PublicKeyLen is the size of public keys used in this package, in bytes.
-	PublicKeyLen = 32
+	// PublicKeySize is the size of public keys used in this package, in bytes.
+	PublicKeySize = 32
 
-	// PrivateKeyLen is the size of private keys used in this package, in bytes.
-	PrivateKeyLen = 32
+	// PrivateKeySize is the size of private keys used in this package, in bytes.
+	PrivateKeySize = 32
 )
 
-type PublicKey [PublicKeyLen]byte
-type PrivateKey [PrivateKeyLen]byte
+type PublicKey [PublicKeySize]byte
+type PrivateKey [PrivateKeySize]byte
 
-// KeyExchange defines methods necessary for X3DH key agreement.
-type KeyExchange interface {
-	// GenerateKey generates a public/private key pair using entropy from rand reader.
-	// If reader is nil, crypto/rand.Reader will be used.
-	GenerateKey(reader io.Reader) (PublicKey, PrivateKey, error)
+// Curve represents either X25519 or X488 elliptic curve
+type Curve interface {
+	// GenerateKey generates private key using entropy from rand reader
+	GenerateKey(reader io.Reader) (privateKey PrivateKey, err error)
 
-	// PublicKey when given user's private key, computes (on curve) user's public key.
-	PublicKey(PrivateKey) PublicKey
+	// PublicKey given user's private key, computes (on curve) corresponding public key.
+	PublicKey(privateKey PrivateKey) (publicKey PublicKey)
 
-	// ComputeSecret computes the shared secret using otherPublicKey as the other
-	// party's public key and returns the computed shared secret.
+	// ComputeSecret computes the shared secret using otherPublicKey as the other party's public key.
 	ComputeSecret(privateKey PrivateKey, otherPublicKey PublicKey) []byte
 }
 
-// X25519 is key exchange based no X25519 curve.
-type X25519 struct{}
-
-// NewX25519 creates instance of X25519-based key exchange.
-func NewX25519() KeyExchange {
-	return new(X25519)
+// KeyExchangeParams defines set of parameters used for constructing key exchange object.
+type KeyExchangeParams struct {
+	info  string      // string identifying the application
+	curve Curve       // either X25519 or X448
+	hash  crypto.Hash // 256 or 512-bit hash function (e.g. SHA256 or SHA512)
 }
 
-// GenerateKey generates a public/private key pair using entropy from rand reader.
-// If reader is nil, crypto/rand.Reader will be used.
-func (curve X25519) GenerateKey(reader io.Reader) (publicKey PublicKey, privateKey PrivateKey, err error) {
-	if reader == nil {
-		reader = rand.Reader
+// KeyExchange is a facade for DH key exchange functionality.
+type KeyExchange struct {
+	curve Curve
+	hash  crypto.Hash
+}
+
+// New creates new key exchange object, using default params.
+func New() *KeyExchange {
+	params := KeyExchangeParams{
+		info:  "default",
+		curve: NewCurve25519(),
+		hash:  crypto.SHA256,
 	}
 
-	_, err = io.ReadFull(reader, privateKey[:])
+	return NewKeyExchange(params)
+}
+
+// NewKeyExchange creates parametrized version of key exchange object.
+func NewKeyExchange(params KeyExchangeParams) *KeyExchange {
+	return &KeyExchange{
+		curve: params.curve,
+		hash:  params.hash,
+	}
+}
+
+// GenerateKeyPair generates a public/private key pair using entropy from rand reader.
+// If reader is nil, crypto/rand.Reader will be used.
+func (kex KeyExchange) GenerateKeyPair(reader io.Reader) (publicKey PublicKey, privateKey PrivateKey, err error) {
+	privateKey, err = kex.curve.GenerateKey(reader)
 	if err != nil {
 		return
 	}
 
-	// see https://cr.yp.to/ecdh.html
-	privateKey[0] &= 248
-	privateKey[31] &= 127
-	privateKey[31] |= 64
-
-	curve25519.ScalarBaseMult((*[PublicKeyLen]byte)(&publicKey), (*[PrivateKeyLen]byte)(&privateKey))
+	publicKey = kex.curve.PublicKey(privateKey)
 	return
 }
 
-// PublicKey when given user's private key, computes (on curve) user's public key.
-func (curve X25519) PublicKey(privateKey PrivateKey) (publicKey PublicKey) {
-	curve25519.ScalarBaseMult((*[PublicKeyLen]byte)(&publicKey), (*[PrivateKeyLen]byte)(&privateKey))
-	return
-}
-
-// ComputeSecret computes the shared secret using otherPublicKey as the other
-// party's public key and returns the computed shared secret.
-func (curve X25519) ComputeSecret(privateKey PrivateKey, otherPublicKey PublicKey) []byte {
-	var sharedSecret [PrivateKeyLen]byte
-	curve25519.ScalarMult(&sharedSecret, (*[PrivateKeyLen]byte)(&privateKey), (*[PublicKeyLen]byte)(&otherPublicKey))
-
-	return sharedSecret[:]
+// Curve returns associated elliptic curve (either X25519 or X488)
+func (kex KeyExchange) Curve() Curve {
+	return kex.curve
 }

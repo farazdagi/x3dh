@@ -28,9 +28,9 @@ func TestX25519PublicKey(t *testing.T) {
 		},
 	}
 
-	dh := NewX25519()
+	kex := New()
 	for _, tt := range tests {
-		publicKey := dh.PublicKey(tt.privateKey)
+		publicKey := kex.Curve().PublicKey(tt.privateKey)
 
 		if !bytes.Equal(tt.publicKey[:], publicKey[:]) {
 			t.Errorf("Invalid PublicKey returned, expected: '%x', got '%x'", tt.publicKey, publicKey)
@@ -52,9 +52,9 @@ func TestX25519ComputeSecret(t *testing.T) {
 		},
 	}
 
-	dh := NewX25519()
+	kex := New()
 	for _, tt := range tests {
-		sharedSecret := dh.ComputeSecret(tt.privateKey, tt.publicKey)
+		sharedSecret := kex.Curve().ComputeSecret(tt.privateKey, tt.publicKey)
 
 		if !bytes.Equal(tt.sharedSecret[:], sharedSecret[:]) {
 			t.Errorf("Invalid shared secret computed, expected: '%x', got '%x'", tt.sharedSecret, sharedSecret)
@@ -63,30 +63,30 @@ func TestX25519ComputeSecret(t *testing.T) {
 }
 
 func TestX25519KeyAgreement(t *testing.T) {
-	dh := NewX25519()
+	kex := New()
 
-	alicePublicKey, alicePrivateKey, err := dh.GenerateKey(nil)
+	alicePublicKey, alicePrivateKey, err := kex.GenerateKeyPair(nil)
 	if err != nil {
 		t.Fatal("Cannot generate key for Alice")
 	}
 
-	expectedPublicKey := dh.PublicKey(alicePrivateKey)
+	expectedPublicKey := kex.Curve().PublicKey(alicePrivateKey)
 	if !bytes.Equal(alicePublicKey[:], expectedPublicKey[:]) {
 		t.Fatalf("Invalid pulic key for Alice, expected: %x, got: %x", expectedPublicKey, alicePublicKey)
 	}
 
-	bobPublicKey, bobPrivateKey, err := dh.GenerateKey(nil)
+	bobPublicKey, bobPrivateKey, err := kex.GenerateKeyPair(nil)
 	if err != nil {
 		t.Fatal("Cannot generate key for Bob")
 	}
 
-	expectedPublicKey = dh.PublicKey(bobPrivateKey)
+	expectedPublicKey = kex.Curve().PublicKey(bobPrivateKey)
 	if !bytes.Equal(bobPublicKey[:], expectedPublicKey[:]) {
 		t.Fatalf("Invalid pulic key for Bob, expected: %x, got: %x", expectedPublicKey, bobPublicKey)
 	}
 
-	aliceSharedSecret := dh.ComputeSecret(alicePrivateKey, bobPublicKey)
-	bobSharedSecret := dh.ComputeSecret(bobPrivateKey, alicePublicKey)
+	aliceSharedSecret := kex.Curve().ComputeSecret(alicePrivateKey, bobPublicKey)
+	bobSharedSecret := kex.Curve().ComputeSecret(bobPrivateKey, alicePublicKey)
 
 	if !bytes.Equal(aliceSharedSecret, bobSharedSecret) {
 		t.Errorf("Shared key mismatch, Alice: %x, Bob: %x", aliceSharedSecret, bobSharedSecret)
