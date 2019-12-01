@@ -30,35 +30,24 @@ type Curve interface {
 	ComputeSecret(privateKey PrivateKey, otherPublicKey PublicKey) []byte
 }
 
-// KeyExchangeParams defines set of parameters used for constructing key exchange object.
-type KeyExchangeParams struct {
+// KeyExchange is a facade for DH key exchange functionality.
+type KeyExchange struct {
 	info  string      // string identifying the application
 	curve Curve       // either X25519 or X448
 	hash  crypto.Hash // 256 or 512-bit hash function (e.g. SHA256 or SHA512)
 }
 
-// KeyExchange is a facade for DH key exchange functionality.
-type KeyExchange struct {
-	curve Curve
-	hash  crypto.Hash
-}
-
-// New creates new key exchange object, using default params.
+// New creates default key exchange implementation
 func New() *KeyExchange {
-	params := KeyExchangeParams{
-		info:  "default",
-		curve: NewCurve25519(),
-		hash:  crypto.SHA256,
-	}
-
-	return NewKeyExchange(params)
+	return NewKeyExchange("default", NewCurve25519(), crypto.SHA256)
 }
 
 // NewKeyExchange creates parametrized version of key exchange object.
-func NewKeyExchange(params KeyExchangeParams) *KeyExchange {
+func NewKeyExchange(info string, curve Curve, hash crypto.Hash) *KeyExchange {
 	return &KeyExchange{
-		curve: params.curve,
-		hash:  params.hash,
+		info:  info,
+		curve: curve,
+		hash:  hash,
 	}
 }
 
